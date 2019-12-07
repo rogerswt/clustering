@@ -119,7 +119,7 @@ gate_scat = function(ff, show = FALSE, show.fn = NULL) {
   params = c("FSC-A", "SSC-A")
 
   pre = Subset(ff, rectangleGate("FSC-A" = c(0.4, Inf)))
-  bb = blob.boundary(pre, parameters = params, location = c(1, 1), height = 0.1)
+  bb = blob.boundary(pre, parameters = params, location = c(1, 1), height = 0.2)
   # inflate generously
   idist = 0.25
   bb_infl = inflate.contour(get.hull(bb), dist = idist)
