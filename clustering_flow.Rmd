@@ -1,0 +1,428 @@
+---
+title: "Approaches and pitfalls in clustering"
+author: "Matei Ionita"
+date: "12/5/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Including some useful packages
+```{r packages, results='hide', message=FALSE, warning=FALSE}
+# Basic manipulation of flowFrames
+library(flowCore)
+
+# Clustering packages
+library(FlowSOM)
+library(cluster)
+library(mclust)
+
+# Dimensional reduction
+library(umap)
+
+# Pretty plots
+library(ggplot2)
+
+# Ugly plots, but in 3D
+library(rgl)
+```
+
+## Loading a dataset
+The FlowSOM package (which we'll explore in more detail soon) includes a toy dataset called "Lymphocytes". This consists of approximately 19k events and 11 colors. I'll use this dataset to demonstrate the properties of various clustering approaches.
+```{r load_lymphocites}
+# Reading the file as a flowFrame using flowCore:
+file_lymph <- system.file("extdata","68983.fcs",
+                          package="FlowSOM")
+ff <- suppressWarnings(flowCore::read.FCS(file_lymph))
+# Processing the file: compensation and biexponential transform, but no scaling
+fSOM <- ReadInput(ff,compensate = TRUE,transform = TRUE, scale = FALSE)
+
+# Dropping the FSC, SSC, Time columns, keeping the 11 colors
+params = colnames(fSOM$data)[8:18]
+dat = fSOM$data[,params]
+
+# Some basic exploration of the data:
+dim(dat)
+head(dat)
+```
+
+
+For a start, let's select T-cells by applying a single CD3 gate, and then examine the CD4/CD8 distribution.
+```{r make_cd4_cd8}
+gate_cd3 = which(dat[,11] > 1.7)
+cd4_cd8 = dat[gate_cd3,c(9,2)]
+colnames(cd4_cd8) = c("CD4", "CD8")
+
+# Check how many events survived the gate
+dim(cd4_cd8)
+
+# Plot using ggplot2
+ggplot(data.frame(cd4_cd8), aes(x=CD4, y=CD8) ) + 
+    geom_point(shape = 20, size = 1, alpha = 0.5) 
+```
+
+
+## k-means clustering in 2D
+
+Try the most basic clustering algorithm: k-means. 
+```{r kmeans_2d}
+# Seed the random generator, for reproducibility of results
+set.seed(42)
+
+# Run k-means clustering
+km = kmeans(cd4_cd8, centers = 4, nstart = 1, iter.max = 10)
+
+# km$cluster returns a list of cluster assignments
+cluster_assignment = as.factor(km$cluster)
+head(cluster_assignment, 100)
+
+# Plot again, this time using cluster assignments as color
+ggplot(data.frame(cd4_cd8), aes(x=CD4, y=CD8, color=cluster_assignment) ) + 
+    geom_point(shape = 20, size = 3, alpha = 0.5) 
+
+```
+
+
+Let's try different initializations and see what changes.
+```{r kmeans_2d_seeds}
+plot_kmeans_steps = function(seed)
+{
+  set.seed(seed)
+  km = kmeans(cd4_cd8, centers = 4, nstart = 1, iter.max = 10)
+  cluster_assignment = as.factor(km$cluster)
+
+  ggplot(data.frame(cd4_cd8), aes(x=CD4, y=CD8, color=cluster_assignment) ) + 
+    geom_point(shape = 20, size = 3, alpha = 0.5) 
+}
+
+for (seed in c(21:30))
+{
+  plot = plot_kmeans_steps(seed)
+  print(plot)
+}
+```
+
+
+Using the nstart parameter, tell kmeans to run multiple initializations, and choose the one which gives the best results.
+```{r kmeans_nstart}
+set.seed(42)
+km = kmeans(cd4_cd8, centers = 4, nstart = 20, iter.max = 10)
+cluster_assignment = as.factor(km$cluster)
+
+ggplot(data.frame(cd4_cd8), aes(x=CD4, y=CD8, color=cluster_assignment) ) + 
+    geom_point(shape = 20, size = 3, alpha = 0.5) 
+```
+
+What do we mean by "best results"? Define the cluster variability to be the sum of the squares of the distances from all datapoints in the cluster to the cluster mean. Define the total variability to be the sum of the cluster variabilities. From each initialization, k-means finds a different local minimum of the total variability. When running multiple initializations, k-means compares the local minima, and chooses the smallest of them.
+
+
+
+
+## FlowSOM in 2D
+
+```{r FlowSOM_2d_grid}
+set.seed(42)
+fSOM <- FlowSOM(file_lymph,                 
+                # Input options:
+                compensate = TRUE, transform = TRUE, toTransform=c(8:18),
+                scale = FALSE,
+                # Use only CD4 and CD8:
+                colsToUse = c(9,16), 
+                # Mesh size:
+                xdim = 5, ydim = 5,
+                # Metaclustering options:
+                nClus = 4)
+
+PlotStars(fSOM[[1]], view = "grid")
+
+```
+
+```{r FlowSOM_2d_metaclustering}
+PlotStars(fSOM[[1]], view = "grid", backgroundValues = as.factor(fSOM[[2]]))
+```
+
+```{r FlowSOM_2d_tree}
+PlotStars(fSOM[[1]], view = "MST", backgroundValues = as.factor(fSOM[[2]]))
+```
+
+Let's go back to the 2D scatterplot, and re-make it using the clustering assignment given by FlowSOM.
+
+```{r FlowSOM_plot}
+events_to_nodes = fSOM$FlowSOM$map$mapping[,1]
+head(events_to_nodes, 100)
+
+nodes_to_clusters = fSOM[[2]]
+nodes_to_clusters
+
+events_to_clusters = nodes_to_clusters[events_to_nodes]
+head(events_to_clusters, 100)
+
+
+ggplot(data.frame(cd4_cd8), aes(x=CD4, y=CD8, color=events_to_clusters[gate_cd3]) ) + 
+    geom_point(shape = 20, size = 3, alpha = 0.5) 
+
+```
+
+
+## Clustering in 11D: FlowSOM versus UMAP
+
+Now that we successfully clustered the cells into CD4, CD8, Double Negative and Double Positive populations, we can attempt a more complex task: clustering the cells using all 11 markers simultaneously.
+
+```{r FlowSOM_nd}
+set.seed(42)
+
+fSOM <- FlowSOM(file_lymph,                 
+                # Input options:
+                compensate = TRUE, transform = TRUE, toTransform=c(8:18),
+                scale = TRUE,
+                # SOM options:
+                colsToUse = c(9,12,14:18), xdim = 7, ydim = 7,
+                # Metaclustering options:
+                maxMeta = 15)
+
+
+PlotStars(fSOM[[1]], backgroundValues = as.factor(fSOM[[2]]))
+
+```
+
+
+How do we evaluate the quality of this clustering? Looking at a 11-dimensional scatterplot of all events is challenging. One option is to use a dimensional reduction algorithm, such as PCA (Principal Component Analysis), t-SNE (t-distributed Stochastic Neighbor Embedding) or UMAP (Uniform Manifold Approximation and Projection). All have advantages and disadvantages; for now I'll go with UMAP.
+
+```{r UMAP}
+start.time <- Sys.time()
+lymph.umap = umap(dat, n_neighbors = 5, random_state = 42, n_components = 2, min_dist = 0.99)
+end.time <- Sys.time()
+print(end.time - start.time)
+
+ggplot(data.frame(lymph.umap$layout), aes(x=X1, y=X2) ) + 
+    geom_point(shape = 20, size = 3, alpha = 0.5) 
+
+```
+
+UMAP's projection suggests some cluster separation. Let's see how well it compares to the clustering that we obtained from FlowSOM a few minutes ago.
+
+```{r compare_flowsom_umap}
+# Use the previously computed FlowSOM to map each event to a cluster
+events_to_nodes = fSOM$FlowSOM$map$mapping[,1]
+nodes_to_clusters = fSOM[[2]]
+events_to_clusters = nodes_to_clusters[events_to_nodes]
+
+
+ggplot(data.frame(lymph.umap$layout), aes(x=X1, y=X2, color = events_to_clusters) ) + 
+    geom_point(shape = 20, size = 3, alpha = 0.5) 
+
+```
+
+They match quite well, but not perfectly. UMAP is attempting to do a finer clustering, compared to FlowSOM. In particular, FlowSOM's cluster 2 (brown) is split by UMAP into three distinct components.
+
+
+## A hard challenge: tail phenotypes
+
+FlowSOM and UMAP have one thing in common: dimensional reduction. This is explicit in UMAP, which performs a non-linear projection onto a lower dimensional space. It is implicit in FlowSOM, which fits a 2D mesh of nodes to the dataset. Both of them tend to treat higher dimensions as noise that's better ignored. This assumption is sometimes justified, but not always.
+
+```{r generate_mixture_distr}
+pheno1<-rnorm(10000,0,1) # first phenotype: 10000 events, mean 0, std 1
+pheno2<-rnorm(1000 ,3,2) #second phenotype:  1000 events, mean 3, std 2
+mixture<-c(pheno1, pheno2) #all events
+df<-data.frame(mixture,phenotype=c(rep(1,10000),rep(2,1000))) #tack on a column to indicate phenotype
+
+ggplot(df) +
+  geom_density(aes(x=mixture))
+```
+
+
+```{r 3d_mixture}
+# Create two more variables; for simplicity, just shuffle the rows of the first one
+set.seed(42)
+df2 = df[sample(nrow(df)),]
+df3 = df[sample(nrow(df)),]
+
+names(df) = c("x", "px")
+names(df2)= c("y", "py")
+names(df3)= c("z", "pz")
+
+# Concatenate, and label phenotypes 1-8
+df_3d = cbind(df, df2, df3)
+df_3d["phenotype"] = 4 * (df_3d["px"] - 1) + 2 * (df_3d["py"] - 1) + df_3d["pz"]
+
+# Count events of each phenotype
+table(df_3d["phenotype"])
+
+# Make the 3D plot
+plot3d(df_3d[,"x"], df_3d[,"y"], df_3d[,"z"], "x", "y", "z", col = df_3d[,"phenotype"])
+```
+
+Let's try to use UMAP to dimensionally reduce the data from 3d to 2d:
+
+```{r UMAP_3d_mixture}
+synthetic.umap = umap(df_3d[,c("x","y","z")], n_neighbors = 5, random_state = 42, n_components = 2, min_dist = 0.99)
+
+ggplot(data.frame(synthetic.umap$layout), aes(x=X1, y=X2, color = as.factor(df_3d[,"phenotype"])) ) + 
+    geom_point(shape = 20, size = 3, alpha = 0.9) 
+```
+
+
+Not very helpful. In this case, let's try to use k-means to cluster the data.
+
+```{r kmeans_3d_mixture}
+set.seed(42)
+km = kmeans(df_3d[,c("x","y","z")], centers = 8, nstart = 20, iter.max = 20)
+cluster_assignment = as.factor(km$cluster)
+
+plot3d(df_3d[,"x"], df_3d[,"y"], df_3d[,"z"], "x", "y", "z", col = cluster_assignment)
+```
+
+
+Again, not helpful. Let's try to give k-means some help, by providing a reasonable guess for the cluster means.
+```{r kmeans_3d_mixture_domain_knowledge}
+set.seed(42)
+
+mean1 = c(0,0,0)
+mean2 = c(3,0,0)
+mean3 = c(0,3,0)
+mean4 = c(0,0,3)
+mean5 = c(3,3,0)
+mean6 = c(3,0,3)
+mean7 = c(0,3,3)
+mean8 = c(3,3,3)
+mean_all = rbind(mean1,mean2,mean3,mean4,mean5,mean6,mean7,mean8)
+
+km = kmeans(df_3d[,c("x","y","z")], centers = mean_all, nstart = 1, iter.max = 20)
+cluster_assignment = as.factor(km$cluster)
+
+plot3d(df_3d[,"x"], df_3d[,"y"], df_3d[,"z"], "x", "y", "z", col = cluster_assignment)
+```
+
+
+Even with help from our domain knowledge, k-means performs badly.
+
+
+We could also try FlowSOM, but that requires a FlowFrame as input. Let's cast our synthetic data into a FlowFrame, and plug it into FlowSOM.
+
+```{r make_ff}
+mat = as.matrix(df_3d[,c("x", "y", "z")])
+ff = new("flowFrame", exprs = mat)
+
+set.seed(42)
+
+fSOM <- FlowSOM(ff,                 
+                # Input options:
+                compensate = FALSE, transform = FALSE,
+                scale = FALSE,
+                # SOM options:
+                xdim = 5, ydim = 5,
+                colsToUse = c("x", "y", "z"),
+                # Metaclustering options:
+                nClus = 8)
+
+PlotStars(fSOM[[1]], backgroundValues = as.factor(fSOM[[2]]))
+
+```
+
+It seems that the self-organizing map fits many triple negative and double negative nodes, but no double positive or triple positive ones. Let's check this with a 3d plot.
+
+```{r FlowSOM_no_initialization}
+events_to_nodes = fSOM$FlowSOM$map$mapping[,1]
+nodes_to_clusters = fSOM[[2]]
+events_to_clusters = nodes_to_clusters[events_to_nodes]
+
+plot3d(df_3d[,"x"], df_3d[,"y"], df_3d[,"z"], "x", "y", "z", col = events_to_clusters)
+```
+
+So FlowSOM doesn't perform great, but better than k-means. For a fair comparison, we should try to help FlowSOM the same way we helped k-means: by providing a good initialization. This is slightly tricky: even though we want to end up with 8 clusters, we need to initialize a larger number of SOM nodes. Below I use a 5 by 5 grid, so I need to expand the 8 existing centroids to 25.
+
+```{r FlowSOM_with_initialization}
+set.seed(42)
+
+# Duplicate some of the existing centroids
+fSOM_nodes = rbind(mean_all[rep(1,12),], 
+                   mean_all[rep(2, 3),],
+                   mean_all[rep(3, 3),],
+                   mean_all[rep(4, 3),],
+                   mean_all[rep(5, 1),],
+                   mean_all[rep(6, 1),],
+                   mean_all[rep(7, 1),],
+                   mean_all[rep(8, 1),]
+                   )
+
+print(fSOM_nodes)
+
+
+fSOM <- FlowSOM(ff,                 
+                # Input options:
+                compensate = FALSE, transform = FALSE,
+                scale = FALSE,
+                # SOM options:
+                xdim = 5, ydim = 5,
+                colsToUse = c("x", "y", "z"),
+                # Initialize centroids:
+                codes = fSOM_nodes,
+                # Metaclustering options:
+                nClus = 8)
+
+PlotStars(fSOM[[1]], backgroundValues = as.factor(fSOM[[2]]))
+```
+
+We should check how the cluster assignment looks on the 3d plot.
+
+```{r FlowSOM_with_initialization_3d}
+events_to_nodes = fSOM$FlowSOM$map$mapping[,1]
+nodes_to_clusters = fSOM[[2]]
+events_to_clusters = nodes_to_clusters[events_to_nodes]
+
+plot3d(df_3d[,"x"], df_3d[,"y"], df_3d[,"z"], "x", "y", "z", col = events_to_clusters)
+```
+
+We're not quite there yet. The metaclustering step of FlowSOM splits and merges our phenotypes in unexpected ways, even though we made sure that there are nodes initialized in each of the eight octants.
+
+
+## Gaussian Mixture Models
+
+In this approach, we try to model the data distribution as a sum of Gaussians. Each cluster has a mean, just like before - but now there is also a variance matrix, which models how spread out a cluster is, and what orientation it has. The extra flexibility could prove useful.
+
+```{r gmm}
+fit = Mclust(data =  df_3d[,c("x","y","z")], G = 8, modelNames = "VVV")
+cluster_assignment = as.factor(fit$classification)
+
+plot3d(df_3d[,"x"], df_3d[,"y"], df_3d[,"z"], "x", "y", "z", col = cluster_assignment)
+```
+
+
+Still no luck. Let's try to help the mixture model by providing a sensible initialization, just like we did with k-means.
+
+```{r gmm_domain_knowledge}
+mixture = list()
+mixture$pro = rep(1/8, 8)
+mixture$mean = t(mean_all)
+mixture$variance$cholsigma = array(NaN, c(3,3,8)) 
+for (component in c(1:8)) 
+{ 
+  mixture$variance$cholsigma[,,component] = diag(3) 
+} 
+
+set.seed(42)
+fit = em(modelName = "VVV", data = df_3d[,c("x","y","z")], 
+                        parameters = mixture,  
+                        prior = priorControl(shrinkage = 0)) 
+cluster_assignment = as.factor(apply(fit$z, 1, which.max) )
+
+plot3d(df_3d[,"x"], df_3d[,"y"], df_3d[,"z"], "x", "y", "z", col = cluster_assignment)
+```
+
+
+Finally, we get a reasonable clustering. The extra flexibility of GMM has paid off.
+The price we pay is extra computation time. GMM is slower than k-means by a factor of d^2, where d is the number of variables. For us, d=3, so this is not terrible. In a state of the art flow dataset, you can have d = 30, which makes GMM slower by a factor of 900.
+
+
+
+
+
+
+
+
+
+
+
+
