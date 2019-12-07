@@ -130,7 +130,7 @@ gate_scat = function(ff, show = FALSE, show.fn = NULL) {
     if (!is.null(show.fn)) {
       png(filename = show.fn, width = 600, height = 600)
     }
-    pplot(ff_live, c("FSC-A","SSC-A"), tx = 'linear', ty = 'linear', xlim = c(0, 5.4), ylim = c(0, 5.4))
+    pplot(ff, c("FSC-A","SSC-A"), tx = 'linear', ty = 'linear', xlim = c(0, 5.4), ylim = c(0, 5.4))
     lines(bb)
     lines(bb_infl, lwd = 3, col = 'red')
     if (!is.null(show.fn)) {
