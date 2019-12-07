@@ -75,7 +75,11 @@ I thought a bit, then decided that the gating strategy would be as follows:
 it shouldn't matter at what point during an acquisition an event was detected.  Should
 be the same everywhere.  I selected SSC-A and one parameter off of each laser, with
 the idea that if there was a fluidics hiccup I'd see it, and if there was a laser
-hiccup on any laser I'd see that too.
+hiccup on any laser I'd see that too.  By the way, if you look at the images of this "cleaning"
+process you will note that at the beginning of each acquisition there's a lot of jumping
+about, and sometimes at the end (or middle) as well.  Also, looking at the FCS filenames there's
+a hint that these data were acquired from 96-well plates.  Putting 2 + 2 together, I surmise that
+there's a strong need to clean data when automatic plate sampling is done.  Just sayin'...
 1. __gate_singlet()__.  I used a trick I learned from Derrick Jones that just uses FSC-W
 and SSC-W.  It's sort of a short-cut from the usual.
 1. __gate_live()__.  I looked for the LIVEDEAD- and CD3+ blob.  This took a little fiddling
