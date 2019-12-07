@@ -38,7 +38,8 @@ There are three files containing my R code in this repo.
     gated FCS files to be used as input to downstream clustering workflows.
 
 Please feel free to use these as suggestions for your own work.  Below is a summary of
-my thought processes as I proceeded on this work.
+my thought processes as I proceeded on this work. _Apologies for not following some of my
+own coding style suggestions.  Old habits are hard to break!_
 
 ### Evolution of the code and the thinking behind it
 As I've previously mentioned, I like to declare functions in their own separate file:
