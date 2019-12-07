@@ -86,7 +86,8 @@ and SSC-W.  It's sort of a short-cut from the usual.
 to get it to work for all files - in particular I pre-gated to allow blob.boundary()
 to be able to ignore some of the junk down low.
 1. __gate_scat()__.  This was a cleanup gate, since I'd already used CD3 in the previous
-step.  This was particularly helpful in a few cases (e.g. instances 73, 101, 106, ...)
+step.  Again, a little fiddling was required to get this right.
+This was particularly helpful in a few cases (e.g. instances 73, 101, 106, ...)
 where the live gate snagged a few too many events with a bit of expression on the
 live/dead marker.
 
