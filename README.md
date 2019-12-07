@@ -99,7 +99,7 @@ this time _including all fluorescence parameters not used for gating_.
 ![alt text](qc_gated.png)
 
 Here you can see that, in addition to instance #15, there are several that should 
-be checked out (which I haven't done as of this writing!.)  For example, the instances
+be checked out (___which I haven't done as of this writing!___)  For example, the instances
 colored orange to red are of some concern.
 
 Finally, I wrote a new script, __gate_data.R__.  This script repeated the gating
