@@ -38,7 +38,8 @@ There are three files containing my R code in this repo.
     gated FCS files to be used as input to downstream clustering workflows.
 
 Please feel free to use these as suggestions for your own work.  Below is a summary of
-my thought processes as I proceeded on this work.
+my thought processes as I proceeded on this work. _Apologies for not following some of my
+own coding style suggestions.  Old habits are hard to break!_
 
 ### Evolution of the code and the thinking behind it
 As I've previously mentioned, I like to declare functions in their own separate file:
@@ -75,14 +76,19 @@ I thought a bit, then decided that the gating strategy would be as follows:
 it shouldn't matter at what point during an acquisition an event was detected.  Should
 be the same everywhere.  I selected SSC-A and one parameter off of each laser, with
 the idea that if there was a fluidics hiccup I'd see it, and if there was a laser
-hiccup on any laser I'd see that too.
+hiccup on any laser I'd see that too.  By the way, if you look at the images of this "cleaning"
+process you will note that at the beginning of each acquisition there's a lot of jumping
+about, and sometimes at the end (or middle) as well.  Also, looking at the FCS filenames there's
+a hint that these data were acquired from 96-well plates.  Putting 2 + 2 together, I surmise that
+there's a strong need to clean data when automatic plate sampling is done.  Just sayin'...
 1. __gate_singlet()__.  I used a trick I learned from Derrick Jones that just uses FSC-W
 and SSC-W.  It's sort of a short-cut from the usual.
 1. __gate_live()__.  I looked for the LIVEDEAD- and CD3+ blob.  This took a little fiddling
 to get it to work for all files - in particular I pre-gated to allow blob.boundary()
 to be able to ignore some of the junk down low.
 1. __gate_scat()__.  This was a cleanup gate, since I'd already used CD3 in the previous
-step.  This was particularly helpful in a few cases (e.g. instances 73, 101, 106, ...)
+step.  Again, a little fiddling was required to get this right.
+This was particularly helpful in a few cases (e.g. instances 73, 101, 106, ...)
 where the live gate snagged a few too many events with a bit of expression on the
 live/dead marker.
 
@@ -93,7 +99,7 @@ this time _including all fluorescence parameters not used for gating_.
 ![__qc_gated.png__](qc_gated.png)
 
 Here you can see that, in addition to instance #15, there are several that should 
-be checked out (which I haven't done as of this writing!.)  For example, the instances
+be checked out (___which I haven't done as of this writing!___)  For example, the instances
 colored orange to red are of some concern.
 
 Finally, I wrote a new script, __gate_data.R__.  This script repeated the gating
