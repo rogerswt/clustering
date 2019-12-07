@@ -63,6 +63,7 @@ all data into a flowSet.  However, my 16 GB machine ran out of memory when I ran
 so I realized that I needed to subsample the data (see line 34), randomly selecting
 10,000 events from each flowFrame.  Then lines 48-54 compute and display a QC figure,
 which clearly indicates a problem with instance #15.
+![alt text](qc_raw.png)
 
 At this point it was time to look at the other parameters.  I decided that the way
 I would do this would be to first gate T cells, and then fingerprint all of the remaining
