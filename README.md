@@ -64,7 +64,7 @@ so I realized that I needed to subsample the data (see line 34), randomly select
 10,000 events from each flowFrame.  Then lines 48-54 compute and display a QC figure,
 which clearly indicates a problem with instance #15.
 
-![alt text](qc_raw.png)
+![__qc_raw.png__](qc_raw.png)
 
 At this point it was time to look at the other parameters.  I decided that the way
 I would do this would be to first gate T cells, and then fingerprint all of the remaining
@@ -90,7 +90,7 @@ The loop from lines 60-78 in __survey_data.R__ applied the gating strategy and s
 version of the result.  The remaining lines repeated the flowFP QC calculation,
 this time _including all fluorescence parameters not used for gating_.
 
-![alt text](qc_gated.png)
+![__qc_gated.png__](qc_gated.png)
 
 Here you can see that, in addition to instance #15, there are several that should 
 be checked out (which I haven't done as of this writing!.)  For example, the instances
