@@ -13,7 +13,7 @@ data_dir = "~/Data/clustering/"
 
 ds_id = "FR-FCM-ZZGS"
 ds = flowRep.get(ds_id)
-ds = download(ds)
+ds = download(ds, dirpath = data_dir)
 
 # print a summary of the download
 summary(ds)
