@@ -5,40 +5,6 @@
 #
 # 2019-11-07  WTR
 
-# retrieve and prepare files as specified by a list of files and a dbase
-get_sample = function(fn, compensate=TRUE, transform=TRUE, derail=TRUE, deneg=TRUE, nice.names = TRUE, verbose=FALSE) {
-
-  ff = read.FCS(fn)
-  fl_params = which(colnames(ff) %in% colnames(keyword(ff)$SPILL))
-  sc_params = 1:(fl_params[1] - 1)
-
-  if (compensate) {ff = autocomp(ff)}
-
-  if (derail) {
-    ff = Subset(ff, rectangleGate("FSC-A"=c(-Inf, 262142), "SSC-A"=c(-Inf, 262142)))
-  }
-  if (deneg) {
-    ff = Subset(ff, rectangleGate("FSC-A"=c(0, 262143), "SSC-A"=c(0, 262143)))
-  }
-  if (transform) {
-    ff = doTransform(ff, cols = sc_params, method = 'linear')
-    ff = doTransform(ff, cols = fl_params, method = 'biexp')
-  }
-  if (nice.names) {
-    dnames = colnames(ff)    # detector names
-
-    names = parameters(ff)$desc
-    names[sc_params] = c("FSC-A", "FSC-H", "FSC-W", "SSC-A", "SSC-H", "SSC-W")
-    scat_names = names[sc_params]
-    fl_names = names[fl_params]
-    parameters(ff)$desc[sc_params] = scat_names
-
-    colnames(ff) = c(scat_names, fl_names, "Time")
-    parameters(ff)$desc = c(scat_names, paste(dnames[fl_params], fl_names), "Time")
-  }
-
-  ff
-}
 
 # gating functions
 gate_clean = function(ff, params = c("SSC-A", "KI67FITC", "CD127BV421", "CCR4AF647", "PD1PE"), show = FALSE, show.fn = NULL) {
