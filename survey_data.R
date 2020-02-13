@@ -128,7 +128,7 @@ idx = sort(qcval, decreasing = TRUE, index.return = TRUE)$ix
 ################################################################################
 
 # take a look at univariate distributions
-agg = suppressWarnings(as(fs_gated, "flowFrame"))
+agg = suppressWarnings(as(fs_gated[-15], "flowFrame"))   # remove instance 15
 exprs(agg) = exprs(agg)[,which(colnames(agg) != "Original")]
 par(mfrow = c(4,4), mar = c(2,2,2,0))
 for (p in fp_params) {
