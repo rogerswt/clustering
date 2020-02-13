@@ -6,7 +6,6 @@
 # 2019-11-07  WTR
 
 library(wadeTools)
-library(flowFP)
 
 source("~/git/R/tailor/utils/yo_utils.R")
 
