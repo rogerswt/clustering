@@ -4,6 +4,7 @@
 # Utility functions for analysis of the young/old dataset
 #
 # 2019-11-07  WTR
+#   updated 2023-01-31  WTR
 
 
 # gating functions
@@ -40,12 +41,12 @@ gate_singlet = function(ff, show = FALSE, show.fn = NULL, ...) {
     if (!is.null(show.fn)) {
       png(filename = show.fn, width = 600, height = 600)
     }
-    pplot(ff, p_singlet, tx = 'linear', ty = 'linear', xlim =c(0, 5), ylim = c(0, 5), ...)
-    lines(bb_singlet, col = 'red', lwd = 2)
-    xline(fsc_thresh, lty = 'dotdash')
-    yline(ssc_thresh, lty = 'dotdash')
-    text(0.5, 4.5, labels = sprintf("%.2f%% Singlets", 100 * n_singlet / n_orig), pos = 4)
-    par(mfrow = c(1, 1), mar = c(5, 4, 4, 1))
+    p = ggflow(ff, params = p_singlet, indicate_zero = FALSE)
+    cntr = geom_path(bb_singlet, mapping = aes(x = .data[[p_singlet[1]]], y = .data[[p_singlet[2]]]), col = 'red')
+    vl = geom_vline(xintercept = fsc_thresh, linetype = 'twodash')
+    hl = geom_hline(yintercept = ssc_thresh, linetype = 'twodash')
+    tit = annotate("text", label = sprintf("%.2f%% Singlets", 100 * n_singlet / n_orig), x = 4, y = 4, size = 10)
+    p + cntr + vl + hl + tit
 
     if (!is.null(show.fn)) {
       dev.off()
@@ -59,6 +60,8 @@ gate_singlet = function(ff, show = FALSE, show.fn = NULL, ...) {
 gate_live_cd3 = function(ff, show = FALSE, show.fn = NULL, ...) {
   params = c("CD3Q605", "LIVEDEAD")
 
+  n_orig = nrow(ff)
+
   pre_cd3 = bx(1000)
   pre_live = bx(2000)
   pre = Subset(ff, rectangleGate("CD3Q605" = c(pre_cd3, Inf), "LIVEDEAD" = c(-Inf, pre_live)))
@@ -68,17 +71,19 @@ gate_live_cd3 = function(ff, show = FALSE, show.fn = NULL, ...) {
   bb_infl = inflate.contour(get.hull(bb), dist = idist)
   gate_live = polygonGate(.gate = bb_infl)
   ff_live = Subset(ff, gate_live)
+  n_live = nrow(ff_live)
 
   if (show) {
     if (!is.null(show.fn)) {
       png(filename = show.fn, width = 600, height = 600)
     }
-    pplot(ff, plist = params, xlim = c(0, 5.4), ylim = c(0, 5.4), ...)
-    lines(bb)
-    lines(bb_infl, lwd = 3, col = 'red')
-    xline(pre_cd3, lty = 'dotdash')
-    yline(pre_live, lty = 'dotdash')
-    par(mfrow = c(1, 1), mar = c(5, 4, 4, 1))
+    p = ggflow(ff, params = params, indicate_zero = FALSE)
+    cntr = geom_path(bb, mapping = aes(x = .data[[params[1]]], y = .data[[params[2]]]))
+    cntr_infl = geom_path(bb_infl, mapping = aes(x = .data[[params[1]]], y = .data[[params[2]]]), col = 'red')
+    vl = geom_vline(xintercept = pre_cd3, linetype = 'twodash')
+    hl = geom_hline(yintercept = pre_live, linetype = 'twodash')
+    tit = annotate("text", label = sprintf("%.2f%% Live CD3", 100 * n_live / n_orig), x = 4, y = 4, size = 10)
+    p + cntr + cntr_infl + vl + hl + tit
 
     if (!is.null(show.fn)) {
       dev.off()
@@ -110,9 +115,9 @@ gate_live = function(ff, no.debris = TRUE, pre_x = 0.5, pre_y = 0.5,
   lmin_3 = find.local.minima(kde_3, thresh = .005)$x
   lmin_11b = find.local.minima(kde_11b, thresh = .005)$x
   lmin_14 = find.local.minima(kde_14, thresh = .005)$x
-  if(length(lmin_3) == 0) {lmin_3 = bx(2000)}
-  if(length(lmin_11b) == 0) {lmin_11b = bx(2000)}
-  if(length(lmin_14) == 0) {lmin_14 = bx(2000)}
+  if (length(lmin_3) == 0) {lmin_3 = bx(2000)}
+  if (length(lmin_11b) == 0) {lmin_11b = bx(2000)}
+  if (length(lmin_14) == 0) {lmin_14 = bx(2000)}
   thresh_3   = max(lmin_3)
   thresh_11b = max(lmin_11b)
   thresh_14  = max(lmin_14)
@@ -141,7 +146,7 @@ gate_live = function(ff, no.debris = TRUE, pre_x = 0.5, pre_y = 0.5,
   rad = rad + infl
   fitdat = data.frame(x = c(cen1[1], cen2[1]), y = c(cen1[2], cen2[2]))
   mod = lm(x ~ y, data = fitdat)
-  corners = data.frame(y = c(0, 5.5))
+  corners = data.frame(y = c(0, 5.4))
   pred = predict(mod, corners)
   corners = cbind(x = pred, corners)
   corners$x = corners$x + rad
@@ -159,35 +164,69 @@ gate_live = function(ff, no.debris = TRUE, pre_x = 0.5, pre_y = 0.5,
     if (!is.null(show.fn)) {
       png(filename = show.fn, width = 600, height = 800)
     }
-    par(mfrow = c(3, 2))
 
-    pplot(ff, c("FSC-A","SSC-A"), tx = 'linear', ty = 'linear')
-    xline(pre_x, col = 'red')
-    yline(pre_y, col = 'red')
+    # plot 1
+    p1 = ggflow(ff, params = c("FSC-A","SSC-A")) +
+      geom_vline(xintercept = pre_x, col = 'red') +
+      geom_hline(yintercept = pre_y, col = 'red')
 
-    plot(kde_3, type = 'l', col = 'red', xlim = c(0, 5.4), xaxt = 'n', xlab = '', ylab = '', main = "CD3")
-    ax(axis = 1, type = 'biexp')
-    xline(pk_3, lty = 'dotdash')
-    xline(thresh_3, lty = 'dotdash', col = 'blue')
+    # plot 2
+    a = ticks_breaks_labels(ff, "CD3Q605", method = 'biexp')
+    # override default min range
+    a$range[1] = bx(-1000)
+    da = data.frame(kde_3)
+    da = da[da$x > a$range[1] & da$x < a$range[2], ]   # suppress a warning
+    p = ggplot(da, aes(x = x, y = y)) +
+      geom_path(inherit.aes = TRUE) + xlab("") + ylab("") +
+      labs(title = "CD3") + theme(plot.title = element_text(size = 30, hjust = 0.5))
+    xax = scale_x_continuous(breaks = a$major, limits = a$range, minor_breaks = a$ticks, labels = a$labels)
+    vl1 = geom_vline(xintercept = pk_3, linetype = "twodash")
+    vl2 = geom_vline(xintercept = thresh_3, linetype = "twodash", col = 'blue', size = 1)
+    vzero = geom_vline(xintercept = 0, linetype = "dotted")
+    p2 = p + xax + vl1 + vl2 + vzero
 
-    plot(kde_11b, type = 'l', col = 'red', xlim = c(0, 5.4), xaxt = 'n', xlab = '', ylab = '', main = "CD11b")
-    ax(axis = 1, type = 'biexp')
-    xline(pk_11b, lty = 'dotdash')
-    xline(thresh_11b, lty = 'dotdash', col = 'blue')
 
-    plot(kde_14, type = 'l', col = 'red', xlim = c(0, 5.4), xaxt = 'n', xlab = '', ylab = '', main = "CD14")
-    ax(axis = 1, type = 'biexp')
-    xline(pk_14, lty = 'dotdash')
-    xline(thresh_14, lty = 'dotdash', col = 'blue')
+    # plot 3
+    a = ticks_breaks_labels(ff, "CD11BAPCCY7", method = 'biexp')
+    a$range[1] = bx(-1000)
+    da = data.frame(kde_11b)
+    da = da[da$x > a$range[1] & da$x < a$range[2], ]
+    p = ggplot(da, aes(x = x, y = y)) +
+      geom_path(inherit.aes = TRUE) + xlab("") + ylab("") +
+      labs(title = "CD11b") + theme(plot.title = element_text(size = 30, hjust = 0.5))
+    xax = scale_x_continuous(breaks = a$major, limits = a$range, minor_breaks = a$ticks, labels = a$labels)
+    vl1 = geom_vline(xintercept = pk_11b, linetype = "twodash")
+    vl2 = geom_vline(xintercept = thresh_11b, linetype = "twodash", col = 'blue', size = 1)
+    vzero = geom_vline(xintercept = 0, linetype = "dotted")
+    p3 = p + xax + vl1 + vl2 + vzero
 
-    pplot(ff, c("LIVEDEAD", "SSC-A"), ty = 'linear', main = "original", xlim = c(-1, 5.4))
-    pplot(res, c("LIVEDEAD", "SSC-A"), ty = 'linear', main = "live gate", xlim = c(-1, 5.4))
+    # plot 4
+    a = ticks_breaks_labels(ff, "CD14Q800", method = 'biexp')
+    a$range[1] = bx(-1000)
+    da = data.frame(kde_14)
+    da = da[da$x > a$range[1] & da$x < a$range[2], ]
+    p = ggplot(da, aes(x = x, y = y)) +
+      geom_path(inherit.aes = TRUE) + xlab("") + ylab("") +
+      labs(title = "CD14") + theme(plot.title = element_text(size = 30, hjust = 0.5))
+    xax = scale_x_continuous(breaks = a$major, limits = a$range, minor_breaks = a$ticks, labels = a$labels)
+    vl1 = geom_vline(xintercept = pk_14, linetype = "twodash")
+    vl2 = geom_vline(xintercept = thresh_14, linetype = "twodash", col = 'blue', size = 1)
+    vzero = geom_vline(xintercept = 0, linetype = "dotted")
+    p4 = p + xax + vl1 + vl2 + vzero
 
-    lines(bb1)
-    lines(bb2)
-    lines(corners, lwd = 3)
+    # plot 5
+    p5 = ggflow(ff, params = c("LIVEDEAD", "SSC-A")) + ggtitle("Original")
 
-    par(mfrow = c(1, 1), mar = c(5, 4, 4, 1))
+    # plot 6
+    p = ggflow(res, params = c("LIVEDEAD", "SSC-A")) + ggtitle("Live Gate")
+    vbb1 = geom_path(bb1, mapping = aes(x = `LIVEDEAD`, y = `SSC-A`))
+    vbb2 = geom_path(bb2, mapping = aes(x = `LIVEDEAD`, y = `SSC-A`))
+    vgate = geom_path(data.frame(corners, check.names = FALSE), mapping = aes(x = `LIVEDEAD`, y = `SSC-A`), size = 2)
+    p6 = p + vbb1 + vbb2 + vgate
+
+    # render
+    grid.arrange(p1, p2, p3, p4, p5, p6, nrow = 3)
+
 
     if (!is.null(show.fn)) {
       dev.off()

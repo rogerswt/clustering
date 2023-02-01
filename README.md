@@ -42,34 +42,53 @@ my thought processes as I proceeded on this work. _Apologies for not following s
 own coding style suggestions.  Old habits are hard to break!_
 
 ### Evolution of the code and the thinking behind it
-As I've previously mentioned, I like to declare functions in their own separate file:
-in this case, __yo_utils.R__.  I select the "Source on Save" option in the editor,
-and save frequently.  This has the effect of detecting any syntax errors as I go.
-
-I then started writing the script __survey_data.R__.  The idea here was to look for any glaring
+I then started by writing the script __survey_data.R__.  The idea here was to look for any glaring
 staining or other technical artifacts that might be too severe to correct - for example
-by normalization.  At this point, yo_utils.R only had the first function, get_sample().
-The remaining ones were added later.
+by normalization.
+
+The first bit of __survey_data.R__ (down to about line 47) was just to make some basic bivariates as a first
+peek at the data.  I decided to look at FSC vs SSC and SSC vs CD3.  After manually plotting
+the first couple of files, I noticed that the intense peak at very low FSC/SSC
+caused the colors of all of the interesting cells to be a boring blue color.  
+
+![__raw_ungated_001_Tphe09943-005-00_F4_R.png__](raw_ungated_001_Tphe09943-005-00_F4_R.png)
+
+So I added a pair of static gates at very low scattering signals to better visualize
+the more interesting cells (see lines 34-37).  
+
+![__raw_001_Tphe09943-005-00_F4_R.png__](raw_001_Tphe09943-005-00_F4_R.png)
+
+The resulting figures (one for each FCS file) were written into the pic_base 
+directory called raw_*.png.
 
 I had made the decision to use SSC-A, CD3 and LIVEDEAD as
-initial gating parameters.  So the first bit of this script (down to line 46 or so) simply made some figures
-that I could examine manually.  These were the figures written into the pic_base
-directory called raw_*.png.  These I could look at to get a first idea of how the
-data were going to behave.
+initial pre-gating parameters.
 
 I then had the idea to use FlowFP to perform a more
 quantitative survey of lack of conformity of individual samples relative to the
-aggregate of all.  Here is where I went back and added ff_list on line 26 to accumulate
-all data into a flowSet.  However, my 16 GB machine ran out of memory when I ran it,
-so I realized that I needed to subsample the data (see line 34), randomly selecting
-10,000 events from each flowFrame.  Then lines 48-54 compute and display a QC figure,
-which clearly indicates a problem with instance #15.
+aggregate of all.  I wrote the section starting with the comment on line 51
+to accumulate all data into a flowSet.  However, my 16 GB machine ran out of memory when I ran it,
+so I realized that I needed to subsample the data (see line 66), randomly selecting
+10,000 events from each flowFrame.
 
 ![__qc_raw.png__](qc_raw.png)
 
+I noted that instance #15 was goofy looking.  Going back to the raw bivariates, 
+it's clear that this was due to a staining error.  This illustrates the idea that
+you may not want to look at _every_ bivariate you generated, but they're nice to
+have when it's time to identity the reason behind instances that don't look like
+the rest.
+
 At this point it was time to look at the other parameters.  I decided that the way
 I would do this would be to first gate T cells, and then fingerprint all of the remaining
-parameters.  To do this i needed to write the gating code.  So, back to __yo_utils.R__,
+parameters.  To do this i needed to write the gating code.  So, I started a new
+file called __yo_utils.R__ to contain my pre-gating functions.  Note that for
+files containing only function declarations, I like to check the box called
+_source on save_, so every time I save the file (which I do frequently) it is sourced,
+and if there are syntax errors I'll see them immediately instead of waiting till
+the code is executed (at which point I'm likely to be really confused).
+
+
 I thought a bit, then decided that the gating strategy would be as follows:
 
 1. __gate_clean()__.  Look for "stationary" acquisition.  The assumption here is that

@@ -6,6 +6,7 @@
 # 2019-11-07  WTR
 
 library(wadeTools)
+library(gridExtra)
 
 source("~/git/R/tailor/utils/yo_utils.R")
 
@@ -19,32 +20,53 @@ files = grep(pattern = "fcs", x = dir(data_base), fixed = TRUE, value = TRUE)
 
 ################################################################################
 ################################################################################
-# This first section makes figures for perusing, and makes a sampled flowSet
+# This first section makes figures for an initial peek at the data
 ################################################################################
 ################################################################################
-
-ff_list = list()
 for (i in 1:length(files)) {
   cat("working on", i, "...")
   fn = files[i]
   fbase = sub(pattern = ".fcs", replacement = "", x = fn, fixed = TRUE)
   ff = get_sample(tight(data_base, fn))
 
-  # create a flowSet of subsampled data to look for anomalous distributions
-  ff_list[[i]] = Subset(ff, sampleFilter(10000))
+  # after a quick look a the first few files, gate out very low FSC/SSC events
+  # to better visualize distribution
+  g = rectangleGate("FSC-A" = c(.2, Inf), "SSC-A" = c(.2, Inf))
+  ff = Subset(ff, g)
 
   # create some bivariate figures to visually look for outliers
   # NOTE: we are writing directly to the png file, since rendering in the RStudio
   # plot window can be quite slow
-  fn = sprintf("%s%03d%s", tight(pic_base, "raw_"), i, tight("_", fbase, ".png"))
+  fn = sprintf("%s%03d%s", tight(pic_base, "raw_ungated_"), i, tight("_", fbase, ".png"))
   png(filename = fn, width = 1000, height = 600)
-  par(mfrow = c(1, 2))
-  pplot(ff, c("FSC-A", "SSC-A"))
-  pplot(ff, c("CD3Q605", "SSC-A"))
+  p1 = ggflow(ff, c("FSC-A", "SSC-A"))
+  p2 = ggflow(ff, c("CD3Q605", "SSC-A"))
+  grid.arrange(p1, p2, nrow = 1)
   dev.off()
   cat("done.\n")
 }
-fs_raw = flowSet(ff_list)
+
+################################################################################
+################################################################################
+# This next section creates a flowSet comprised of sampled cells from each
+# flowFrame, so that we can use flowFP to look for anomalous distributions
+################################################################################
+################################################################################
+ff_list = list()
+for (i in 1:length(files)) {
+  cat("sampling", i, "...")
+  fn = files[i]
+  fbase = sub(pattern = ".fcs", replacement = "", x = fn, fixed = TRUE)
+  ff = get_sample(tight(data_base, fn))
+
+  g = rectangleGate("FSC-A" = c(.2, Inf), "SSC-A" = c(.2, Inf))
+  ff = Subset(ff, g)
+
+  # create a flowSet of subsampled data to look for anomalous distributions
+  ff_list[[i]] = Subset(ff, sampleFilter(10000))
+  cat("done.\n")
+}
+fs_raw = flowSet(ff_list)   # cast the list to a flowSet
 
 ################################################################################
 ################################################################################
@@ -87,12 +109,11 @@ for (i in 1:length(files)) {
   # make some bivariates
   fn_biv = sprintf("%s%03d%s", tight(pic_base, "gated_"), i, tight("_", fbase, ".png"))
   png(filename = fn_biv, width = 1000, height = 1000)
-    par(mfrow = c(2, 2))
-    pplot(ff, c("CD4PETR", "CD8Q705"), xlim = c(-1, 5.4), ylim = c(-1, 5.4))
-    pplot(ff, c("CD45RAQ655", "CCR7PECY7"), xlim = c(-1, 5.4), ylim = c(-1, 5.4))
-    pplot(ff, c("PD1PE", "CD28PECY5"), xlim = c(-1, 5.4), ylim = c(-1, 5.4))
-    pplot(ff, c("CD95PERCPCY55", "CD11BAPCCY7"), xlim = c(-1, 5.4), ylim = c(-1, 5.4))
-    par(mfrow = c(1, 1))
+    p1 = ggflow(ff, c("CD4PETR", "CD8Q705"), xlim = c(-1, 5.4), ylim = c(-1, 5.4))
+    p2 = ggflow(ff, c("CD45RAQ655", "CCR7PECY7"), xlim = c(-1, 5.4), ylim = c(-1, 5.4))
+    p3 = ggflow(ff, c("PD1PE", "CD28PECY5"), xlim = c(-1, 5.4), ylim = c(-1, 5.4))
+    p4 = ggflow(ff, c("CD95PERCPCY55", "CD11BAPCCY7"), xlim = c(-1, 5.4), ylim = c(-1, 5.4))
+    grid.arrange(p1, p2, p3, p4, nrow = 2)
   dev.off()
 
   ff_list[[i]] = Subset(ff, sampleFilter(10000))
@@ -116,9 +137,9 @@ save(fs_raw, fs_gated, file = tight(pic_base, "sampled_flowsets.rda"))
 ################################################################################
 
 # calculate qcval as in the qc figure
-fpMatrix = counts(fp, transformation='log2norm')
+fpMatrix = counts(fp, transformation = 'log2norm')
 fpMatrix[which(is.infinite(fpMatrix))] = NA
-qcval = apply(fpMatrix, 1, na.rm=TRUE, sd)
+qcval = apply(fpMatrix, 1, na.rm = TRUE, sd)
 
 idx = sort(qcval, decreasing = TRUE, index.return = TRUE)$ix
 
