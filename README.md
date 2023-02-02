@@ -25,6 +25,15 @@ Unfortunately, since it is implemented in MATLAB, which is a commercially availa
 system, you may not be able to run it yourself.  However, you may be able to compare
 your results to the published SWIFT results.
 
+This dataset consists of 136 FCS files.  Each file contains on the order of 500k cells
+with 15 markers including a live/dead marker.  The panel includes markers to delineate
+the usual T cell subsets (CD3, CD4, CD8, CD45RA, CCR7), as well as a few others 
+(e.g. PD1, CD14, CD11b, Ki67, CD95, CD127, CD57, CCR4, CD27).  So, it's a realistically
+large dataset.  It's not a tiny example set, but it's also not as big as what
+you may be collecting in your own labs on modern high-dimensional instrumentation.
+Nevertheless, it'll help you get a handle on the challenges of wrangling relatively
+large data.
+
 ## QC and Gating
 There are three files containing my R code in this repo.
 
