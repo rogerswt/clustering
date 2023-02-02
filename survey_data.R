@@ -23,10 +23,9 @@ files = grep(pattern = "fcs", x = dir(data_base), fixed = TRUE, value = TRUE)
 ################################################################################
 ################################################################################
 # This first section makes figures for an initial peek at the data
-# Only check the first few files to it doesn't take forever
 ################################################################################
 ################################################################################
-for (i in 1:15) {
+for (i in 1:length(files)) {
   cat("peeking at", i, "...")
   fn = files[i]
   fbase = sub(pattern = ".fcs", replacement = "", x = fn, fixed = TRUE)

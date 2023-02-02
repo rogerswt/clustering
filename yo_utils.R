@@ -12,8 +12,11 @@
 # get rid of debris, characterized by very low FSC and SSC
 gate_debris = function(ff, show = FALSE, show.fn = NULL) {
 
-  deb = blob.boundary(ff, location = c(0, 0), gridsize = c(1001, 1001), bandwidth = c(0.05, 0.05), convex = TRUE, height = .75)
-  ff_nodebris = Subset(ff, !polygonGate(.gate = deb))
+  thresh_fsc = .3
+  thresh_ssc = .3
+  gate_nodebris = rectangleGate("FSC-A" = c(thresh_fsc, Inf), "SSC-A" = c(thresh_ssc, Inf))
+  ff_nodebris = Subset(ff, gate_nodebris)
+
   n_orig = nrow(ff)
   n_nodebris = nrow(ff_nodebris)
 
@@ -22,10 +25,11 @@ gate_debris = function(ff, show = FALSE, show.fn = NULL) {
       png(filename = show.fn, width = 800, height = 800)
     }
     p = ggflow(ff, c("FSC-A", "SSC-A"))
-    blob = geom_path(deb, mapping = aes(x = `FSC-A`, y = `SSC-A`), col = 'red', size = 1)
+    vl = geom_vline(xintercept = thresh_fsc, linetype = "twodash")
+    hl = geom_hline(yintercept = thresh_ssc, linetype = "twodash")
     tit = annotate("text", label = sprintf("%.2f%% Not Debris", 100 * n_nodebris / n_orig), x = 4, y = 4, size = 10)
 
-    plot(p + blob + tit)
+    plot(p + vl + hl + tit)
 
     if (!is.null(show.fn)) {
       dev.off()
