@@ -200,8 +200,8 @@ censor$valid[idx[1:11]] = 0
 
 write.csv(censor, file = tight(pic_base, "manifest.csv"))
 
-# at this point, you can edit this spreadsheet, setting the "valid" entry to
-# 0 for each instance you wish to exclude from your analysis.  Your analysis
-# script can easily select instances for which valid == 1.  For example:
+# at this point, you can further edit this spreadsheet, setting the "valid" entry to
+# 0 for any additional instances you may wish to exclude from your analysis.  Your analysis
+# script can easily select instances for which valid == 1.
 
 
