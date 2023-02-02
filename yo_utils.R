@@ -8,6 +8,34 @@
 
 
 # gating functions
+
+# get rid of debris, characterized by very low FSC and SSC
+gate_debris = function(ff, show = FALSE, show.fn = NULL) {
+
+  deb = blob.boundary(ff, location = c(0, 0), gridsize = c(1001, 1001), bandwidth = c(0.05, 0.05), convex = TRUE, height = .75)
+  ff_nodebris = Subset(ff, !polygonGate(.gate = deb))
+  n_orig = nrow(ff)
+  n_nodebris = nrow(ff_nodebris)
+
+  if (show) {
+    if (!is.null(show.fn)) {
+      png(filename = show.fn, width = 800, height = 800)
+    }
+    p = ggflow(ff, c("FSC-A", "SSC-A"))
+    blob = geom_path(deb, mapping = aes(x = `FSC-A`, y = `SSC-A`), col = 'red', size = 1)
+    tit = annotate("text", label = sprintf("%.2f%% Not Debris", 100 * n_nodebris / n_orig), x = 4, y = 4, size = 10)
+
+    plot(p + blob + tit)
+
+    if (!is.null(show.fn)) {
+      dev.off()
+    }
+  }
+
+  ff_nodebris
+}
+
+# Look for stationary acquisition.
 gate_clean = function(ff, params = c("SSC-A", "KI67FITC", "CD127BV421", "CCR4AF647", "PD1PE"), show = FALSE, show.fn = NULL) {
   if (show) {
     if (!is.null(show.fn)) {
@@ -27,7 +55,7 @@ gate_clean = function(ff, params = c("SSC-A", "KI67FITC", "CD127BV421", "CCR4AF6
   ff
 }
 
-gate_singlet = function(ff, show = FALSE, show.fn = NULL, ...) {
+gate_singlet = function(ff, show = FALSE, show.fn = NULL) {
   n_orig = nrow(ff)
   p_singlet = c("FSC-W", "SSC-W")
   bb_singlet = blob.boundary(ff, parameters = p_singlet, location = c(1, 1), height = .05)
@@ -41,12 +69,13 @@ gate_singlet = function(ff, show = FALSE, show.fn = NULL, ...) {
     if (!is.null(show.fn)) {
       png(filename = show.fn, width = 600, height = 600)
     }
-    p = ggflow(ff, params = p_singlet, indicate_zero = FALSE)
+    p = ggflow(ff, params = c("FSC-W", "SSC-W"), indicate_zero = FALSE)
     cntr = geom_path(bb_singlet, mapping = aes(x = .data[[p_singlet[1]]], y = .data[[p_singlet[2]]]), col = 'red')
     vl = geom_vline(xintercept = fsc_thresh, linetype = 'twodash')
     hl = geom_hline(yintercept = ssc_thresh, linetype = 'twodash')
     tit = annotate("text", label = sprintf("%.2f%% Singlets", 100 * n_singlet / n_orig), x = 4, y = 4, size = 10)
-    p + cntr + vl + hl + tit
+    po = p + cntr + vl + hl + tit
+    plot(po)
 
     if (!is.null(show.fn)) {
       dev.off()
@@ -57,6 +86,7 @@ gate_singlet = function(ff, show = FALSE, show.fn = NULL, ...) {
 }
 
 # look for the LIVEDEAD negative, CD3 positive blob
+# DEPRECATED - we don't want to throw out the CD3-
 gate_live_cd3 = function(ff, show = FALSE, show.fn = NULL, ...) {
   params = c("CD3Q605", "LIVEDEAD")
 
@@ -94,18 +124,16 @@ gate_live_cd3 = function(ff, show = FALSE, show.fn = NULL, ...) {
 }
 
 # so as not to exclude CD3-, just try to exclude LIVEDEAD+ events
-#
-gate_live = function(ff, no.debris = TRUE, pre_x = 0.5, pre_y = 0.5,
-                     show = FALSE, show.fn = NULL) {
+# This one is a bit complicated.  After looking at several instances it appeared
+# that there was a blob of CD11b and CD14 cells at somewhat higher SSC, as well
+# as higher LIVEDEAD.  I think these are live cells too, but for whatever reason
+# they show a higher LIVEDEAD marker than the T cells.  So, let's craft a polygon
+# that includes them as well, but excludes the much higher LIVEDEAD values.
+gate_live = function(ff, show = FALSE, show.fn = NULL) {
 
-  if (no.debris) {
-    pre = Subset(ff, rectangleGate("FSC-A" = c(pre_x, Inf), "SSC-A" = c(pre_y, Inf)))
-  } else {
-    pre = ff
-  }
-  kde_3   = normalize.kde(bkde(exprs(pre)[,"CD3Q605"], band = 0.1, grid = 1001))
-  kde_11b = normalize.kde(bkde(exprs(pre)[,"CD11BAPCCY7"], band = 0.1, grid = 1001))
-  kde_14  = normalize.kde(bkde(exprs(pre)[,"CD14Q800"], band = 0.1, grid = 1001))
+  kde_3   = normalize.kde(bkde(exprs(ff)[,"CD3Q605"], band = 0.1, grid = 1001))
+  kde_11b = normalize.kde(bkde(exprs(ff)[,"CD11BAPCCY7"], band = 0.1, grid = 1001))
+  kde_14  = normalize.kde(bkde(exprs(ff)[,"CD14Q800"], band = 0.1, grid = 1001))
 
   pk_3 = max(find.local.maxima(kde_3, thresh = .01)$x)
   pk_11b = max(find.local.maxima(kde_11b, thresh = .01)$x)
@@ -134,8 +162,8 @@ gate_live = function(ff, no.debris = TRUE, pre_x = 0.5, pre_y = 0.5,
   xsep = bx(4000)
   top = Subset(res, rectangleGate("SSC-A" = c(ysep, Inf)), "LIVEDEAD" = c(-Inf, xsep))
   bot = Subset(res, rectangleGate("SSC-A" = c(-Inf, ysep)), "LIVEDEAD" = c(-Inf, xsep))
-  bb1 = blob.boundary(ff = bot, parameters = c("LIVEDEAD", "SSC-A"), location = c(bx(600), 1.0), gridsize = c(501, 501), height = .2)
-  bb2 = blob.boundary(ff = top, parameters = c("LIVEDEAD", "SSC-A"), location = c(bx(2000), 3.2), gridsize = c(501, 501), height = .2)
+  bb1 = blob.boundary(ff = bot, parameters = c("LIVEDEAD", "SSC-A"), location = c(bx(600), 1.0), gridsize = c(1001, 1001), height = .2)
+  bb2 = blob.boundary(ff = top, parameters = c("LIVEDEAD", "SSC-A"), location = c(bx(2000), 3.2), gridsize = c(1001, 1001), height = .2)
   cen1 = centroid(bb1)
   cen2 = centroid(bb2)
 
@@ -158,7 +186,7 @@ gate_live = function(ff, no.debris = TRUE, pre_x = 0.5, pre_y = 0.5,
   corners = as.matrix(corners)
   colnames(corners) = c("LIVEDEAD", "SSC-A")
   pgate = polygonGate(.gate = corners)
-  live = Subset(pre, pgate)
+  ff_live = Subset(ff, pgate)
 
   if (show) {
     if (!is.null(show.fn)) {
@@ -166,9 +194,7 @@ gate_live = function(ff, no.debris = TRUE, pre_x = 0.5, pre_y = 0.5,
     }
 
     # plot 1
-    p1 = ggflow(ff, params = c("FSC-A","SSC-A")) +
-      geom_vline(xintercept = pre_x, col = 'red') +
-      geom_hline(yintercept = pre_y, col = 'red')
+    p1 = ggflow(ff, params = c("FSC-A","SSC-A"))
 
     # plot 2
     a = ticks_breaks_labels(ff, "CD3Q605", method = 'biexp')
@@ -218,11 +244,13 @@ gate_live = function(ff, no.debris = TRUE, pre_x = 0.5, pre_y = 0.5,
     p5 = ggflow(ff, params = c("LIVEDEAD", "SSC-A")) + ggtitle("Original")
 
     # plot 6
-    p = ggflow(res, params = c("LIVEDEAD", "SSC-A")) + ggtitle("Live Gate")
+    p = ggflow(ff, params = c("LIVEDEAD", "SSC-A")) + ggtitle("Live Gate")
     vbb1 = geom_path(bb1, mapping = aes(x = `LIVEDEAD`, y = `SSC-A`))
     vbb2 = geom_path(bb2, mapping = aes(x = `LIVEDEAD`, y = `SSC-A`))
     vgate = geom_path(data.frame(corners, check.names = FALSE), mapping = aes(x = `LIVEDEAD`, y = `SSC-A`), size = 2)
-    p6 = p + vbb1 + vbb2 + vgate
+    tit = annotate("text", label = sprintf("%.2f%% Live", 100 * nrow(ff_live) / nrow(ff)), x = 4, y = 2, size = 8)
+
+    p6 = p + vbb1 + vbb2 + vgate + tit
 
     # render
     grid.arrange(p1, p2, p3, p4, p5, p6, nrow = 3)
@@ -233,7 +261,7 @@ gate_live = function(ff, no.debris = TRUE, pre_x = 0.5, pre_y = 0.5,
     }
   }
 
-  live
+  ff_live
 }
 
 # since we included CD3 in gate_live(), this is just a bit of cleanup
@@ -252,9 +280,10 @@ gate_scat = function(ff, show = FALSE, show.fn = NULL) {
     if (!is.null(show.fn)) {
       png(filename = show.fn, width = 600, height = 600)
     }
-    pplot(ff, c("FSC-A","SSC-A"), tx = 'linear', ty = 'linear', xlim = c(0, 5.4), ylim = c(0, 5.4))
-    lines(bb)
-    lines(bb_infl, lwd = 3, col = 'red')
+    p = ggflow(ff, params = c("FSC-A", "SSC-A")) + ggtitle("Scattering Cleanup")
+    vbb1 = geom_path(bb, mapping = aes(x = `FSC-A`, y = `SSC-A`))
+    vbb2 = geom_path(bb_infl, mapping = aes(x = `FSC-A`, y = `SSC-A`), col = 'red', size = 1)
+    p + vbb1 + vbb2
     if (!is.null(show.fn)) {
       dev.off()
     }
