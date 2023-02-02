@@ -112,14 +112,14 @@ and SSC-W.  It's sort of a short-cut from the usual.
 to get it to work for all files - in particular I pre-gated to allow blob.boundary()
 to be able to ignore some of the junk down low.
 
-The loop from lines 96-125 in __survey_data.R__ applied the gating strategy and stored a sub-sampled
+The loop from lines 100-133 in __survey_data.R__ applied the gating strategy and stored a sub-sampled
 version of the result.  
 
 #### Final QC decisions
 After gating I repeated the flowFP QC calculation,
 this time _including all fluorescence parameters not used for gating_.  This shows some other 
 instances (beyond #15 that we've already mentioned) that may be dubious.  For example,
-look at the bivariates for instances x, x, x.  I think there were some compensation
+look at the bivariates for instances 133, 135, 93, etc.  I think there were some compensation
 problems with these.  You may (or may not) decide to ditch them in favor of having
 the cleanest possible data set.  Alternatively you may decide to keep them to maintain
 statistical power, with the proviso that some results might be contaminated with
@@ -134,7 +134,7 @@ to be used downstream. _However, this is a dubious approach_, since whenever you
 and paste code, you run the risk of going back to the original code, editing it to 
 correct some mistake, and then __forgetting__ to correct the copy.  So, to show
 you what I consider a best practice, I went back and added the gated FCS output
-to __survey_data.R__ (see line xxx).
+to __survey_data.R__ (see lines 116-118).
 
 #### Censoring decisions and implementation
 Note that I would advise that you  __censor__ any instances that do not
@@ -142,7 +142,9 @@ meet your QC criteria.  A convenient way to do this is to create a spreadsheet
 that contains one row for each FCS file.  It has a column, labeled for example
 "valid".  Each file that you like gets a value of 1 for example, and files that
 you don't like get a value of 0 (it doesn't matter what these values are, but
-your downstream code will skip over the invalid files).  See the last few lines
+your downstream code will skip over the invalid files).  You can populate the
+valid column in your code, but you can also manually edit it as you see fit,
+using excel for example.  See the last few lines
 of __survey_data.R__ to see how to get started with this.
 
 Hope this gives you some insight into how I go about starting a project!
