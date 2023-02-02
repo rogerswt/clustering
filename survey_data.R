@@ -105,7 +105,7 @@ for (i in 1:length(files)) {
 
   fn_nodebris = sprintf("%s%03d%s", tight(pic_base, "nodebris_"), i, tight("_", fbase, ".png"))
   fn_clean = sprintf("%s%03d%s", tight(pic_base, "clean_"), i, tight("_", fbase, ".png"))
-  fn_singlet = sprintf("%s%03d%s", tight(pic_base, "singlet_"), i, tight("_", fbase, ".pg"))
+  fn_singlet = sprintf("%s%03d%s", tight(pic_base, "singlet_"), i, tight("_", fbase, ".png"))
   fn_live = sprintf("%s%03d%s", tight(pic_base, "live_"), i, tight("_", fbase, ".png"))
   # fn_scat = sprintf("%s%03d%s", tight(pic_base, "scat_"), i, tight("_", fbase, ".png"))
   ff = gate_debris(ff, show = TRUE, show.fn = fn_nodebris)
