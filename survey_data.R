@@ -194,6 +194,10 @@ colnames(censor) = c("index", "filename", "valid")
 censor[, "index"] = 1:n_instances
 censor[, "filename"] = files
 censor[, "valid"] = rep(1, n_instances)
+
+# upon visual inspection, censor the worst 11 instances (per sorting qcval on gated data)
+censor$valid[idx[1:11]] = 0
+
 write.csv(censor, file = tight(pic_base, "manifest.csv"))
 
 # at this point, you can edit this spreadsheet, setting the "valid" entry to
