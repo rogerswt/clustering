@@ -13,7 +13,8 @@ source("~/git/R/clustering/yo_utils.R")
 
 # proj_base will depend on the particular analysis platform
 proj_base = "~/Data/Independent_Consulting/Penn/Matei/"
-data_base = tight(proj_base, "data/young_old/FR-FCM-ZZGS/")
+data_root = tight(proj_base, "data/young_old/")
+data_base = tight(data_root, "FR-FCM-ZZGS/")
 pic_base = tight(proj_base, "results/young_old/pics/")
 gated_base = tight(proj_base, "results/young_old/gated/")
 
@@ -185,20 +186,19 @@ dev.print(png, tight(pic_base, "univariate_gated.png"), width = 600, height = 60
 
 ################################################################################
 ################################################################################
-# Finally, make a template spreadsheet for censoring decisions
+# Finally, make a template spreadsheet for censoring decisions.  At the same time
+# let's incorporate dataset metadata for statistical analysis purposes.
 ################################################################################
 ################################################################################
-n_instances = length(files)
-censor = data.frame(matrix(NA, nrow = n_instances, ncol = 3))
-colnames(censor) = c("index", "filename", "valid")
-censor[, "index"] = 1:n_instances
-censor[, "filename"] = files
-censor[, "valid"] = rep(1, n_instances)
+manifest = read.csv(tight(data_root, "Aging1_2_Demographics_validity.csv"))
+
+# make sure manifest is in the same order as the list of files
+manifest = manifest[match(files, manifest$FCS.File), ]
 
 # upon visual inspection, censor the worst 11 instances (per sorting qcval on gated data)
-censor$valid[idx[1:11]] = 0
+manifest$valid[idx[1:11]] = 0
 
-write.csv(censor, file = tight(pic_base, "manifest.csv"))
+write.csv(manifest, file = tight(pic_base, "manifest.csv"))
 
 # at this point, you can further edit this spreadsheet, setting the "valid" entry to
 # 0 for any additional instances you may wish to exclude from your analysis.  Your analysis
