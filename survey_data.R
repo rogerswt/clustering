@@ -9,10 +9,11 @@
 library(wadeTools)
 library(gridExtra)
 
-source("~/git/R/clustering/yo_utils.R")
+source("yo_utils.R")
 
 # proj_base will depend on the particular analysis platform
-proj_base = "~/Data/Independent_Consulting/Penn/Matei/"
+# proj_base = "~/Data/Independent_Consulting/Penn/Matei/"
+proj_base = ""
 data_base = tight(proj_base, "data/young_old/FR-FCM-ZZGS/")
 pic_base = tight(proj_base, "results/young_old/pics/")
 gated_base = tight(proj_base, "results/young_old/gated/")
