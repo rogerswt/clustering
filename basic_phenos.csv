@@ -1,0 +1,9 @@
+﻿Phenotype,CD3Q605,CD4PETR,CD8Q705,CD45RAQ655,CCR7PECY7,CD14Q800,KI67FITC
+T cell Other,hi,,,,,,
+T cell CD4 Memory,hi,hi,,,,,
+T cell CD4 Memory KI67,hi,hi,,,,,hi
+T cell CD4 Naive,hi,hi,,hi,hi,,
+T cell CD8 Memory,hi,lo,hi,,,,
+T cell CD8 Memory KI67,hi,lo,hi,,,,hi
+T cell CD8 Naive,hi,lo,hi,hi,hi,,
+Monocyte,lo,,,,,hi,
