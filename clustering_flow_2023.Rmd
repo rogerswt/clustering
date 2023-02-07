@@ -1,0 +1,380 @@
+---
+title: "Clustering and Statistics"
+author: "Matei Ionita"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data pooling
+
+We begin by loading some packages, as well as the subsampled flowsets and
+manifest file created in the earlier pre-gating analysis.
+
+```{r load, message=FALSE, warning=FALSE}
+library(flowCore) # FCS files and cytometry specific data structures
+library(tidyverse) # reading, wrangling and plotting tabular data
+library(umap) # dimensional reduction
+library(FlowSOM) # clustering
+library(Rphenograph) # clustering
+library(pheatmap) # pretty heatmaps
+source("cluster_utils.R") # custom functions for labeling phenotypes
+
+proj_base = ""
+pic_base = paste0(proj_base, "results/young_old/pics/")
+
+load(file = paste0(pic_base, "sampled_flowsets.rda"))
+
+manifest <- read_csv(file = paste0(pic_base, "manifest.csv"))
+manifest
+```
+
+
+`fs_gated` is a flowSet, containing a flowFrame for each biological sample.
+This is just a fancy way to say that we have a list of matrices with protein
+expression data. Indeed, we can use some standard list operations on flowSets,
+such as subsetting using `[]`. In this case, we want to select those instances
+which are valid according to our QC criteria.
+
+```{r aggregate}
+fs_gated <- fs_gated[which(manifest$valid==1)]
+
+# the "apply" family of functions in base R is used to define a function
+# on the fly, then apply it to each individual list item.
+# fsApply does the same for flowSets
+agg <- fsApply(fs_gated, function(ff) {
+  # pattern match column names; | is "or" operator
+  remove <- grep("FSC|SSC|Time|LIVE", colnames(ff))
+  # extract expression data, without channels already used for pre-gating
+  mat <- exprs(ff)[,-remove] 
+  return(mat)
+})
+
+dim(agg)
+```
+
+Now we have a single matrix containing 10,000 cells from each of 125 files,
+and measurements of 15 proteins.
+
+
+
+## Clustering: Dimensional Reduction
+
+To build intuition, we begin our analysis with dimensional reduction,
+because this is a family of methods that lets us visualize the data.
+
+Dimensional reduction methods are very time consuming, and running `umap` on
+a million cells would take a few hours. To save time, and since we're using
+`umap` just as a visualization tool, we down-sample our data even more, to
+20,000 total cells. To time the execution, we wrapped the call to `umap` 
+inside a call to `system.time`. With as little as 20,000 cells, `umap` took
+50s to run on Matei's computer.
+
+```{r umap}
+set.seed(0) # set seed for reproducibility
+sel <- sample(nrow(agg), 2e4)
+data_sel <- agg[sel,] # subsample data
+system.time(um <- umap(data_sel)) # run and time umap
+```
+
+For our first visualization, we run the simplest scatterplot of the two
+`umap` axes, using `ggplot`.
+
+```{r umap_plot_basic}
+# cast the subsampled data to a data frame
+# mutate adds the 2 umap coordinates as new columns
+dim_red <- as_tibble(data_sel) %>%
+  mutate(umap1 = um$layout[,1],
+         umap2 = um$layout[,2])
+
+ggplot(dim_red, aes(x=umap1, y=umap2)) +
+  geom_point() +
+  theme_bw(base_size=16)
+```
+
+To make the plot more informative, we decrease the size and transparency of
+points, so that density becomes more apparent. We also color code the points
+by the expression of CD3, a protein which reliably marks T cells.
+
+```{r umap_plot_CD3}
+ggplot(dim_red, aes(x=umap1, y=umap2, color=CD3Q605)) +
+  geom_point(alpha=0.5, shape=1, size=0.5) +
+  scale_color_gradient(low="black", high="red") +
+  theme_bw(base_size=16)
+```
+
+We produce similar plots for all 15 proteins, and save them to file.
+
+```{r umap_plot_save}
+for (marker in colnames(agg)) {
+  # tidyverse makes it easy to write literal column names (umap1, umap2)
+  # and annoying to use names stored in variables (marker)
+  ggplot(dim_red, aes(x=umap1, y=umap2, color=.data[[marker]])) +
+    geom_point(alpha=0.5, shape=1, size=0.5) +
+    scale_color_gradient(low="black", high="red") +
+    theme_bw(base_size=16)
+  
+  # ggsave has smart defaults for figure sizing
+  ggsave(filename=paste0(pic_base, "umap/", marker, ".png"))
+}
+```
+
+Recall that our goal is to count cells belonging to each phenotype, tabulate
+this information and use it in downstream statistical analysis. We could
+use the dimensionally reduced coordinates to define cell clusters, and assign
+each cell a cluster identity. However, we have two objections:
+
+* A practical one: we only ran UMAP on 20,000 cells, and scaling it to all cells
+would take a long time.
+* A philosophical one: most dimensional reduction algorithms are black boxes,
+which can distort data structure, or even create structure where there is none.
+
+Instead, we will look at clustering algorithms that work directly with the
+15-dimensional data, and scale linearly with the number of cells.
+
+
+## Clustering: FlowSOM
+
+FlowSOM is a fast and powerful algorithm, specialized for cytometry data.
+First, we run it with default settings; notice that it takes about 30s 
+to process more than a million cells. The array `fsom_clustering` contains
+cluster membership ids for all cells; the function `table` can tell us how
+many there are of each type.
+
+```{r FlowSOM_default}
+set.seed(0)
+system.time(fsom <- FlowSOM(agg)) # building the model
+fsom_clustering <- GetMetaclusters(fsom) # exctracting cluster ids
+table(fsom_clustering)
+```
+
+We can visualize the FlowSOM clustering results on the pre-existing UMAP
+embedding -- just map the cluster ids to the color aesthetic in ggplot.
+
+```{r plot_FlowSOM_default}
+# add cluster ids to the data frame,
+# selecting only the 20,000 cells used by UMAP
+dim_red <- dim_red %>%
+  mutate(fsom_cluster = fsom_clustering[sel]) 
+
+# technicality: the guides call overrides size/transparency settings,
+# to make the legend more readable
+ggplot(dim_red, aes(x=umap1, y=umap2, color=fsom_cluster)) +
+  geom_point(alpha=0.5, shape=1, size=0.5) +
+  guides(color = guide_legend(override.aes = list(alpha = 1, size = 2, shape=19))) +  
+  theme_bw(base_size=16)
+```
+
+FlowSOM produced 10 clusters, which don't quite capture all the structure
+in the data -- in particular, all CD4 T cells form a single cluster, regardless
+of memory or activation stage. How did it come up with 10? It turns out that
+this is a hard-coded default in the `FlowSOM` function, using the argument
+`nClus = 10`. To fix this, we could:
+
+* Use the `maxMeta` argument, which overrides `nClus`, and looks for the
+optimum number of clusters up to `maxMeta`, using the elbow method.
+Unfortunately, their implementation tends to under-cluster a lot, so we don't
+recommend using it.
+* Try different values for `nClus`, and use either visual inspection or
+a criterion like elbow or silhouette to choose an optimal value.
+
+It helps to separate the `FlowSOM` call into two separate steps: a call to
+`SOM` which does most of the work building the model, and one to
+`metaClustering_consensus` which only takes a second to do the final clustering.
+The latter step can be repeated with different values of `k`, at minimal
+computational overhead. Here, for simplicity, we run it only once with `k=25`.
+
+```{r FlowSOM_custom}
+set.seed(0)
+system.time(som <- SOM(agg)) # building the model
+system.time(metacl <- metaClustering_consensus(som$codes, k=25)) # clustering
+fsom_clustering <- as.factor(metacl[som$mapping[,1]]) # extracting cluster ids
+table(fsom_clustering)
+```
+
+```{r plot_FlowSOM_custom}
+dim_red <- dim_red %>%
+  mutate(fsom_cluster = fsom_clustering[sel])
+
+ggplot(dim_red, aes(x=umap1, y=umap2, color=fsom_cluster)) +
+  geom_point(alpha=0.5, shape=1, size=0.5) +
+  guides(color = guide_legend(override.aes = list(alpha = 1, size = 2, shape=19))) +  
+  theme_bw(base_size=16)
+```
+
+
+## Clustering: interpretation
+
+Next, we should understand the phenotypes of the clusters that FlowSOM found.
+A first step is to compute a representative centroid for each cluster,
+and visualize the centroids on a heatmap.
+
+```{r centroids}
+fsom_medians <- sapply(levels(fsom_clustering), function(lev) {
+  agg[which(fsom_clustering==lev),] %>% # selecting cells belonging to a cluster
+    apply(2, median) # computing column-wise medians
+}) %>% t()
+pheatmap(fsom_medians) # pretty heatmaps
+```
+
+Clusters 1 and 24 turn out to be some sort of outliers, containing very few
+cells with unusually bright or dark expression for some markers. This is most
+likely a technical artifact, such as a compensation issue. We will ignore them
+downstream.
+
+A second step is to label the clusters using human-readable phenotypes.
+This necessarily involves some domain knowledge, which we summarized in
+a data frame.
+
+```{r definitions}
+defs <- read_csv("basic_phenos.csv")
+defs
+```
+
+Using the centroids and the definitions, we can match each cluster to a
+phenotype, or label it "Other" if no match is found. We wrote a function
+called `label_clusters`, which splits each marker into "lo" and "hi" modalities,
+based on the distribution of the cluster centroids, and then matches them
+to definitions. Look in the `cluster_utils.R` file for details, although we
+stress that this implementation is imperfect, and we encourage you to
+build your own.
+
+```{r labeling, fig.width=12}
+# extract labels; ignore outlier clusters when defining modalities
+labels <- label_clusters(fsom_medians, defs, outliers = c(1,24))
+row.names(fsom_medians) <- labels
+levels(fsom_clustering) <- labels
+
+pheatmap(fsom_medians)
+
+dim_red <- dim_red %>%
+  mutate(fsom_cluster = fsom_clustering[sel])
+
+ggplot(dim_red, aes(x=umap1, y=umap2, color=fsom_cluster)) +
+  geom_point(alpha=0.5, shape=1, size=0.5) +
+  guides(color = guide_legend(override.aes = list(alpha = 1, size = 2, shape=19))) +
+  theme_bw(base_size=16)
+```
+
+## Statistics
+
+Now that we have a reasonable clustering, we look for associations of
+cluster sizes with sample metadata. We begin by tabulating cell type
+proportions in each file.
+
+```{r features}
+n_each <- fsApply(fs_gated, nrow) %>% as.numeric() # how many cells in each file?
+file_names <- manifest %>%
+  filter(valid == 1) %>%
+  pull(FCS.File) # what are the file names?
+samples <- rep(file_names, times=n_each) # array with file id for each cell
+
+tab <- table(samples, fsom_clustering) %>% # table of cluster counts by file
+  apply(1, function(row) row/sum(row)) %>% # normalize counts to fractions
+  t() # transpose, to have files along rows, clusters along columns
+
+features <- as_tibble(tab) %>% # cast the table to a data frame
+  mutate(FCS.File = row.names(tab)) %>% # add file names as a column
+  relocate(FCS.File) # put the file names first
+
+features
+```
+
+We put together the features with the sample metadata. The only interesting
+piece of metadata is age; following the authors who collected the data, we
+use a categorical "young"/"old" variable. As a warm-up exercise, let's look 
+at some boxplots of age distribution per group.
+
+```{r features_meta}
+# use a join to keep track of file order
+# introduce a group variable as a shorthand for the clunky sample description
+features_meta <- inner_join(manifest, features) %>%
+  mutate(Group=if_else(grepl("Young", Sample.Description), "Young", "Old"))
+
+ggplot(features_meta, aes(x=Age, y=Group, fill=Group)) +
+  geom_boxplot() +
+  theme_bw(base_size=16)
+```
+
+Replace the age with one of the cluster percentages we computed.
+
+```{r cd4_ki67}
+ggplot(features_meta, aes(x=`T cell CD4 Memory KI67`, 
+                          y=Group, fill=Group)) +
+  geom_boxplot() +
+  theme_bw(base_size=16)
+```
+
+These are memory CD4 cells undergoing division. Usually this means they are
+activating in response to encountering an antigen, which makes them a
+meaningful feature in understanding immune responses. However, they don't seem
+differentially expressed between our two age groups.
+
+`ggplot` is great for multi-facet plots, which can show us the distribution
+of all clusters at once. First we pivot the data, then we plot:
+
+```{r pivot}
+# pivot_longer turns the 25 columns of cluster frequencies into just two
+# columns, one containing cluster names, the other the frequencies
+features_meta_tall <- features_meta %>%
+  pivot_longer(all_of(labels), names_to="cluster", values_to="frequency")
+features_meta_tall
+```
+
+```{r facet_plot, fig.width=12, fig.height=10}
+# facet_wrap filters the tall data on each of the cluster names,
+# creating a separate facet for each
+ggplot(features_meta_tall, aes(x=frequency, y=Group, fill=Group)) +
+  geom_boxplot() +
+  facet_wrap(~cluster, scales="free_x") +
+  theme_bw(base_size=16)
+```
+
+Visually, some clusters look differentially expressed. For a quantitative
+measure, we use the non-parametric Wilcoxon rank-sum test to check
+associations between cluster percentages and age group.
+
+```{r wilcoxon}
+# iterate over cluster labels and store a p value for each
+pvals <- sapply(labels, function(label) {
+  # select frequencies of current cluster in young group
+  x <- features_meta %>% 
+    filter(Group=="Young") %>% 
+    pull(label)
+  # select frequencies of current cluster in old group
+  y <- features_meta %>% 
+    filter(Group=="Old") %>% 
+    pull(label)
+  # run test
+  wilcox <- wilcox.test(x,y)
+  return(wilcox$p.value)
+})
+
+# adjust for multiple comparisons
+padj <- p.adjust(pvals, method="fdr") 
+sort(padj)
+```
+
+Success, we found some highly significant results! Let's see the direction
+of these differences, by looking at boxplots for significant clusters only.
+
+```{r plot_significant, fig.width=10, fig.height=8}
+# extract clusters which are significant at fdr < 5%
+signif <- names(which(padj < 0.05))
+
+# same as before, but filter on significant clusters
+ggplot(features_meta_tall %>% filter(cluster %in% signif), 
+       aes(x=frequency,y=Group,fill=Group)) +
+  geom_boxplot() +
+  facet_wrap(~cluster, scales="free_x") +
+  theme_bw(base_size=16)
+```
+
+Younger folks tend to have more naive T cells and fewer memory T cells.
+This is a known result which makes intuitive sense: young people have had fewer
+chances to encounter pathogens and build up an immune memory.
+
+

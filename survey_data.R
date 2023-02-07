@@ -9,12 +9,12 @@
 library(wadeTools)
 library(gridExtra)
 
-source("yo_utils.R")
+source("~/git/R/clustering/yo_utils.R")
 
 # proj_base will depend on the particular analysis platform
-# proj_base = "~/Data/Independent_Consulting/Penn/Matei/"
-proj_base = ""
-data_base = tight(proj_base, "data/young_old/FR-FCM-ZZGS/")
+proj_base = "~/Data/Independent_Consulting/Penn/Matei/"
+data_root = tight(proj_base, "data/young_old/")
+data_base = tight(data_root, "FR-FCM-ZZGS/")
 pic_base = tight(proj_base, "results/young_old/pics/")
 gated_base = tight(proj_base, "results/young_old/gated/")
 
@@ -31,12 +31,12 @@ for (i in 1:length(files)) {
   fn = files[i]
   fbase = sub(pattern = ".fcs", replacement = "", x = fn, fixed = TRUE)
   ff = get_sample(tight(data_base, fn))
-
+  
   # after a quick look a the first few files, gate out very low FSC/SSC events
   # to better visualize distribution
   g = rectangleGate("FSC-A" = c(.2, Inf), "SSC-A" = c(.2, Inf))
   ff = Subset(ff, g)
-
+  
   # create some bivariate figures to visually look for outliers
   # NOTE: we are writing directly to the png file, since rendering in the RStudio
   # plot window can be quite slow
@@ -61,10 +61,10 @@ for (i in 1:length(files)) {
   fn = files[i]
   fbase = sub(pattern = ".fcs", replacement = "", x = fn, fixed = TRUE)
   ff = get_sample(tight(data_base, fn))
-
+  
   g = rectangleGate("FSC-A" = c(.2, Inf), "SSC-A" = c(.2, Inf))
   ff = Subset(ff, g)
-
+  
   # create a flowSet of subsampled data to look for anomalous distributions
   ff_list[[i]] = Subset(ff, sampleFilter(10000))
   cat("done.\n")
@@ -102,7 +102,7 @@ for (i in 1:length(files)) {
   fn = files[i]
   fbase = sub(pattern = ".fcs", replacement = "", x = fn, fixed = TRUE)
   ff = get_sample(tight(data_base, fn))
-
+  
   fn_nodebris = sprintf("%s%03d%s", tight(pic_base, "nodebris_"), i, tight("_", fbase, ".png"))
   fn_clean = sprintf("%s%03d%s", tight(pic_base, "clean_"), i, tight("_", fbase, ".png"))
   fn_singlet = sprintf("%s%03d%s", tight(pic_base, "singlet_"), i, tight("_", fbase, ".png"))
@@ -113,21 +113,21 @@ for (i in 1:length(files)) {
   ff = gate_singlet(ff, show = TRUE, show.fn = fn_singlet)
   ff = gate_live(ff, show = TRUE, show.fn = fn_live)
   # ff = gate_scat(ff, show = TRUE, show.fn = fn_scat)   # don't do this - eliminates most CD14, CD11b
-
+  
   # output gated files for downstream analysis
   outfile = tight(gated_base, fbase, ".fcs")
   write.FCS(ff, filename = outfile)
-
+  
   # make some bivariates
   fn_biv = sprintf("%s%03d%s", tight(pic_base, "gated_"), i, tight("_", fbase, ".png"))
   png(filename = fn_biv, width = 1000, height = 1000)
-    p1 = ggflow(ff, c("CD3Q605","CD4PETR"))
-    p2 = ggflow(ff, c("CD8Q705", "CD4PETR"))
-    p3 = ggflow(ff, c("CD3Q605", "CD45RAQ655"))
-    p4 = ggflow(ff, c("CD8Q705", "CD11BAPCCY7"))
-    grid.arrange(p1, p2, p3, p4, nrow = 2)
+  p1 = ggflow(ff, c("CD3Q605","CD4PETR"))
+  p2 = ggflow(ff, c("CD8Q705", "CD4PETR"))
+  p3 = ggflow(ff, c("CD3Q605", "CD45RAQ655"))
+  p4 = ggflow(ff, c("CD8Q705", "CD11BAPCCY7"))
+  grid.arrange(p1, p2, p3, p4, nrow = 2)
   dev.off()
-
+  
   ff_list[[i]] = Subset(ff, sampleFilter(10000))
   cat("done.\n")
 }
@@ -186,20 +186,19 @@ dev.print(png, tight(pic_base, "univariate_gated.png"), width = 600, height = 60
 
 ################################################################################
 ################################################################################
-# Finally, make a template spreadsheet for censoring decisions
+# Finally, make a template spreadsheet for censoring decisions.  At the same time
+# let's incorporate dataset metadata for statistical analysis purposes.
 ################################################################################
 ################################################################################
-n_instances = length(files)
-censor = data.frame(matrix(NA, nrow = n_instances, ncol = 3))
-colnames(censor) = c("index", "filename", "valid")
-censor[, "index"] = 1:n_instances
-censor[, "filename"] = files
-censor[, "valid"] = rep(1, n_instances)
+manifest = read.csv(tight(data_root, "Aging1_2_Demographics_validity.csv"))
+
+# make sure manifest is in the same order as the list of files
+manifest = manifest[match(files, manifest$FCS.File), ]
 
 # upon visual inspection, censor the worst 11 instances (per sorting qcval on gated data)
-censor$valid[idx[1:11]] = 0
+manifest$valid[idx[1:11]] = 0
 
-write.csv(censor, file = tight(pic_base, "manifest.csv"))
+write.csv(manifest, file = tight(pic_base, "manifest.csv"))
 
 # at this point, you can further edit this spreadsheet, setting the "valid" entry to
 # 0 for any additional instances you may wish to exclude from your analysis.  Your analysis
