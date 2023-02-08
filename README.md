@@ -1,3 +1,32 @@
+# To follow along on your computer
+__
+NOTE: In order to run this analysis on your computer, you must set things up
+as follows:__
+
+1. Set up a location on your computer (we'll call it the base directory) where
+you'll be working on the project
+1. In that directory, set up the following hierarchy:
+ - base
+      - data
+         - young_old
+            - FR-FCM-ZZGS
+               - ... the 136 FCS files you downloaded from FlowRepository
+      - results
+         - young_old
+            - results
+               - gated
+               - pics
+1. Copy the file Aging1_2_Demographics_validity.csv (provided in the project directory) 
+to your base_dir/data/young_old directory (at the same level as FR-FCM-ZZGS)
+1. Edit the survey_data.R script, and change the proj_base variable to the location
+you established as your base directory
+1. Run the survey_data.R script to completion (this will take a pretty long time,
+perhaps 2-3 hours, more or less, depending on your computer's speed)
+1. Edit the clustering_flow_2023.Rmd markdown document, and point_proj_base to the
+same place as in survey_data.R
+1. Knit this rmarkdown document (should only take a few minutes)
+
+
 # Clustering
 Project for exploration of clustering approaches
 
@@ -51,6 +80,8 @@ There are three files containing my R code in this repo.
 Please feel free to use these as suggestions for your own work.  Below is a summary of
 my thought processes as I proceeded on this work. _Apologies for not following some of my
 own coding style suggestions.  Old habits are hard to break!_
+
+
 
 ### Evolution of the code and the thinking behind it
 I then started by writing the script __survey_data.R__.  The idea here was to look for any glaring
@@ -158,6 +189,7 @@ of __survey_data.R__ to see how to get started with this.
 
 Hope this gives you some insight into how I go about starting a project!
 
+# Next step:  clustering and statistical analysis
 
 
 
