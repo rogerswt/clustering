@@ -23,7 +23,7 @@ library(Rphenograph) # clustering
 library(pheatmap) # pretty heatmaps
 source("cluster_utils.R") # custom functions for labeling phenotypes
 
-proj_base = ""
+proj_base = "~/Data/Independent_Consulting/Penn/Matei/"
 pic_base = paste0(proj_base, "results/young_old/pics/")
 
 load(file = paste0(pic_base, "sampled_flowsets.rda"))

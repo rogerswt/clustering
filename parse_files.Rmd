@@ -1,0 +1,116 @@
+---
+title: "Parse Files"
+author: "Matei Ionita"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data manifest from file names
+
+Load the tidyverse, which contains some useful functions for data wrangling.
+
+
+```{r tidyverse, message=FALSE, warning=FALSE}
+library(tidyverse)
+```
+
+Say that you have multiple data files in different folders, for example
+based on different medical conditions. We'll explore how to create a data
+manifest on the fly, based on the file names and the directory structure.
+
+For this exercise, I created two directories called "cond1" 
+and "cond2", and placed them in a parent directory called "data".
+Then I created two (empty) .txt files in each directory.
+
+If you want to follow along on your own system:
+
+* create the same file structure yourself;
+* change the `data_base` variable below to whatever your parent directory is.
+By default, paths will be interpreted relative to your working directory --
+run the `getwd()` command if you're not sure where that is. Otherwise you
+could provide an absolute path from your home folder on your machine,
+denoted by `~`. An example is Wade's use of
+`proj_base = "~/Data/Independent_Consulting/Penn/Matei/"`.
+
+Once you complete these prerequisites, you can use the `list.files` command
+to find files in a given location, whose name matches a given pattern.
+In this case, I'm looking for the .txt files I created. For your project,
+you may want to replace .txt with .fcs.
+
+The argument `recursive=TRUE` looks inside subdirectories of `data_base`.
+Use `?list.files` to read the documentation of this function and learn more.
+
+```{r read}
+data_base <- "data"
+files <- list.files(path=data_base, pattern=".txt", recursive = TRUE)
+files
+```
+
+Let's start creating the manifest. We create a tibble (fancy name for a data
+frame) which initially has just one column, the file path. Then we mutate
+to add additional columns. Note the pipe operator `%>%`, which takes the
+output of the previous command and inputs it to the next.
+
+```{r manifest}
+manifest <- tibble(path = files) %>% # Data frame with one column, the file path
+  mutate(filename = path %>%
+           str_split(pattern="/") %>% # Split the path on "/"
+           sapply("[", 2), # Filename is the second piece
+         condition = path %>%
+           str_split(pattern="/") %>%
+           sapply("[", 1)) # Condition is the first piece (directory name)
+
+manifest
+```
+
+Let's go further and extract the tissue type and subject name from the filename.
+We now have to split on two characters, "_" and ".". For this we use the
+expression "[_.]+".
+
+```{r split_file_name, tibble.width=Inf}
+manifest <- manifest %>%
+  mutate(tissue = filename %>%
+           str_split(pattern="[_.]+") %>% # Split string on multiple characters
+           sapply("[", 1), # Tissue is first piece
+         subject = filename %>%
+           str_split(pattern="[_.]+") %>%
+           sapply("[", 2)) # Subject name is second piece
+
+manifest
+```
+
+## Joining with analysis results
+
+Assume now that you did some analysis on your files, and came up
+with some values for a biomarker in each of the files. For this
+exercise, I will create some dummy results instead of actually
+running an analysis.
+
+```{r dummy_results}
+results <- tibble(file = sort(files, decreasing=TRUE),
+                  biomarker = c(1, 1, 5, 6))
+
+results
+```
+
+For some reason, the order of your files changed during the analysis.
+If you naively concatenate the results with your manifest (using the
+`rbind` function) you will mix up the association between subjects
+and results. To avoid this you should do a join.
+
+```{r join_data}
+manifest_results <- inner_join(manifest, results, by=c("path"="file"))
+manifest_results
+```
+
+Now everything looks good, and you can do some statistics. In this case,
+we explicitly told `inner_join` what columns to use for matching. By
+default, it will use all columns with common names between the two
+data frames, and throw an error if it doesn't find any.
+
+
+
