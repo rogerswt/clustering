@@ -13,9 +13,8 @@ you'll be working on the project
                - ... the 136 FCS files you downloaded from FlowRepository
       - results
          - young_old
-            - results
-               - gated
-               - pics
+             - gated
+             - pics
 1. Copy the file Aging1_2_Demographics_validity.csv (provided in the project directory) 
 to your base_dir/data/young_old directory (at the same level as FR-FCM-ZZGS)
 1. Edit the survey_data.R script, and change the proj_base variable to the location
