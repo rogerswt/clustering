@@ -31,12 +31,12 @@ for (i in 1:length(files)) {
   fn = files[i]
   fbase = sub(pattern = ".fcs", replacement = "", x = fn, fixed = TRUE)
   ff = get_sample(tight(data_base, fn))
-
+  
   # after a quick look a the first few files, gate out very low FSC/SSC events
   # to better visualize distribution
   g = rectangleGate("FSC-A" = c(.2, Inf), "SSC-A" = c(.2, Inf))
   ff = Subset(ff, g)
-
+  
   # create some bivariate figures to visually look for outliers
   # NOTE: we are writing directly to the png file, since rendering in the RStudio
   # plot window can be quite slow
@@ -61,10 +61,10 @@ for (i in 1:length(files)) {
   fn = files[i]
   fbase = sub(pattern = ".fcs", replacement = "", x = fn, fixed = TRUE)
   ff = get_sample(tight(data_base, fn))
-
+  
   g = rectangleGate("FSC-A" = c(.2, Inf), "SSC-A" = c(.2, Inf))
   ff = Subset(ff, g)
-
+  
   # create a flowSet of subsampled data to look for anomalous distributions
   ff_list[[i]] = Subset(ff, sampleFilter(10000))
   cat("done.\n")
@@ -102,7 +102,7 @@ for (i in 1:length(files)) {
   fn = files[i]
   fbase = sub(pattern = ".fcs", replacement = "", x = fn, fixed = TRUE)
   ff = get_sample(tight(data_base, fn))
-
+  
   fn_nodebris = sprintf("%s%03d%s", tight(pic_base, "nodebris_"), i, tight("_", fbase, ".png"))
   fn_clean = sprintf("%s%03d%s", tight(pic_base, "clean_"), i, tight("_", fbase, ".png"))
   fn_singlet = sprintf("%s%03d%s", tight(pic_base, "singlet_"), i, tight("_", fbase, ".png"))
@@ -113,21 +113,21 @@ for (i in 1:length(files)) {
   ff = gate_singlet(ff, show = TRUE, show.fn = fn_singlet)
   ff = gate_live(ff, show = TRUE, show.fn = fn_live)
   # ff = gate_scat(ff, show = TRUE, show.fn = fn_scat)   # don't do this - eliminates most CD14, CD11b
-
+  
   # output gated files for downstream analysis
   outfile = tight(gated_base, fbase, ".fcs")
   write.FCS(ff, filename = outfile)
-
+  
   # make some bivariates
   fn_biv = sprintf("%s%03d%s", tight(pic_base, "gated_"), i, tight("_", fbase, ".png"))
   png(filename = fn_biv, width = 1000, height = 1000)
-    p1 = ggflow(ff, c("CD3Q605","CD4PETR"))
-    p2 = ggflow(ff, c("CD8Q705", "CD4PETR"))
-    p3 = ggflow(ff, c("CD3Q605", "CD45RAQ655"))
-    p4 = ggflow(ff, c("CD8Q705", "CD11BAPCCY7"))
-    grid.arrange(p1, p2, p3, p4, nrow = 2)
+  p1 = ggflow(ff, c("CD3Q605","CD4PETR"))
+  p2 = ggflow(ff, c("CD8Q705", "CD4PETR"))
+  p3 = ggflow(ff, c("CD3Q605", "CD45RAQ655"))
+  p4 = ggflow(ff, c("CD8Q705", "CD11BAPCCY7"))
+  grid.arrange(p1, p2, p3, p4, nrow = 2)
   dev.off()
-
+  
   ff_list[[i]] = Subset(ff, sampleFilter(10000))
   cat("done.\n")
 }
